@@ -15,9 +15,9 @@ import (
 const (
 	screenWidth  = 800
 	screenHeight = 600
-	gravity      = 0.5
+	gravity      = 0.3  // 降低重力值从0.5到0.3
 	moveSpeed    = 3
-	jumpPower    = -12
+	jumpPower    = -10  // 调整跳跃力度从-12到-10
 	airResistance = 0.98
 )
 
@@ -126,10 +126,39 @@ func (g *Game) handleInput() {
 	}
 
 	// 跳跃 (改为W键)
-	if inpututil.IsKeyJustPressed(ebiten.KeyW) && g.player.onGround {
-		g.player.vy = jumpPower
-		g.player.onGround = false
+	if inpututil.IsKeyJustPressed(ebiten.KeyW) {
+		// 使用另一种方式实现跳跃 - 直接检查玩家下方是否有地面
+		if g.canJump() {
+			g.player.vy = jumpPower
+			g.player.onGround = false
+		}
 	}
+}
+
+// canJump 检查玩家是否可以跳跃
+func (g *Game) canJump() bool {
+	// 如果玩家已经在地面上，则可以跳跃
+	if g.player.onGround {
+		return true
+	}
+	
+	// 检查玩家下方是否有平台（另一种方式判断是否可以跳跃）
+	// 创建一个位于玩家下方的临时检测区域
+	tempPlayer := Player{
+		x:      g.player.x,
+		y:      g.player.y + 1, // 玩家下方1个像素的位置
+		width:  g.player.width,
+		height: g.player.height,
+	}
+	
+	// 检查这个位置是否与任何平台相交
+	for _, block := range g.platforms {
+		if g.checkCollision(tempPlayer, block) {
+			return true
+		}
+	}
+	
+	return false
 }
 
 func (g *Game) applyPhysics() {
@@ -181,12 +210,18 @@ func (g *Game) checkCollisions() {
 			} else if minOverlap == dy1 {
 				// 从下方撞到方块（头顶撞到方块）
 				g.player.y = block.y - g.player.height
-				g.player.vy = 0
+				// 只有当玩家向上移动时才停止
+				if g.player.vy < 0 {
+					g.player.vy = 0
+				}
 			} else if minOverlap == dy2 {
 				// 从上方撞到方块（站在方块上）
 				g.player.y = block.y + block.height
-				g.player.vy = 0
-				g.player.onGround = true // 站在方块上
+				// 只有当玩家向下移动时才停止并标记为在地面上
+				if g.player.vy >= 0 {
+					g.player.vy = 0
+					g.player.onGround = true
+				}
 			}
 		}
 	}
@@ -229,6 +264,7 @@ func (g *Game) resetGame() {
 		y:      100,
 		width:  20,
 		height: 20,
+		onGround: false, // 明确初始化onGround状态
 	}
 	g.score = 0
 }
@@ -285,6 +321,17 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return screenWidth, screenHeight
 }
 
+// Jump 实现玩家跳跃功能
+func (g *Game) Jump() {
+	// 检查玩家是否可以跳跃（在地面上）
+	if g.player.onGround {
+		// 给玩家一个向上的速度
+		g.player.vy = jumpPower
+		// 玩家离开地面
+		g.player.onGround = false
+	}
+}
+
 func NewGame() *Game {
 	game := &Game{
 		player: Player{
@@ -292,6 +339,7 @@ func NewGame() *Game {
 			y:      100,
 			width:  20,
 			height: 20,
+			onGround: false, // 明确初始化onGround状态
 		},
 		platforms: []Block{
 			// 地面
